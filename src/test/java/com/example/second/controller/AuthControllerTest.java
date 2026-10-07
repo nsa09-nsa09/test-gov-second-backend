@@ -3,6 +3,7 @@ package com.example.second.controller;
 import com.example.second.dto.TokenExchangeResponse;
 import com.example.second.dto.UserInfoDto;
 import com.example.second.service.IdTokenValidator;
+import com.example.second.service.KeycloakTokenExchangeService;
 import com.example.second.service.SecondTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,9 +35,12 @@ class AuthControllerTest {
     @Mock
     private SecondTokenService secondTokenService;
 
+    @Mock
+    private KeycloakTokenExchangeService keycloakTokenExchangeService;
+
     @BeforeEach
     void setUp() {
-        AuthController controller = new AuthController(idTokenValidator, secondTokenService);
+        AuthController controller = new AuthController(idTokenValidator, secondTokenService, keycloakTokenExchangeService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new com.example.second.exception.GlobalExceptionHandler())
                 .build();
@@ -105,5 +109,43 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.access_token").value("new-access-token"))
                 .andExpect(jsonPath("$.refresh_token").value("new-refresh-token"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/exchange-access-token с валидным access_token возвращает токены от Keycloak")
+    void testExchangeAccessTokenSuccess() throws Exception {
+        UserInfoDto user = new UserInfoDto("user-1", "aitu3", "aitu3@test.kz", "Aitu User", List.of("user"));
+        TokenExchangeResponse response = new TokenExchangeResponse(
+                "kc-access-token",
+                "kc-refresh-token",
+                "Bearer",
+                300,
+                1800,
+                user
+        );
+
+        when(keycloakTokenExchangeService.exchangeAccessToken("alem-access-token")).thenReturn(response);
+
+        mockMvc.perform(post("/api/auth/exchange-access-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"access_token": "alem-access-token"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.access_token").value("kc-access-token"))
+                .andExpect(jsonPath("$.refresh_token").value("kc-refresh-token"))
+                .andExpect(jsonPath("$.expires_in").value(300))
+                .andExpect(jsonPath("$.user.username").value("aitu3"));
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/exchange-access-token с пустым токеном возвращает 400 Bad Request")
+    void testExchangeAccessTokenEmpty() throws Exception {
+        mockMvc.perform(post("/api/auth/exchange-access-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"access_token": ""}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 }

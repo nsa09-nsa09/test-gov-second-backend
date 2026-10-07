@@ -8,6 +8,12 @@ spring:
 alem:
   jwks-url: http://localhost:8080/api/auth/jwks
 
+keycloak:
+  server-url: http://localhost:8180
+  realm: GovApps
+  client-id: second-backend
+  client-secret: wCEkTsw9Fyi8fwvLO1MSuPzf4uX4N6rVFGJqphCdPuTWEt4awJgkmtRm5WndaQZ6VwxtTHKYPLtELbuWVTPVdn
+
 jwt:
   secret: second-backend-super-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256
   issuer: second-backend

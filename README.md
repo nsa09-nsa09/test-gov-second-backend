@@ -20,7 +20,39 @@
 
 ## REST API Эндпоинты
 
-### 1. Обмен ID-токена на токены Second
+### 1. Keycloak RFC 8693 Token Exchange (Обмен Access Token от Alem на токены Second)
+`POST /api/auth/exchange-access-token`
+
+Отправляет полученный от `alem` `access_token` в Keycloak по стандарту **OAuth 2.0 RFC 8693 Token Exchange**. Keycloak проверяет аудиторию (`aud`) и права, после чего сам выпускает пару токенов для клиента `second-backend`.
+
+**Запрос:**
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs..."
+}
+```
+
+**Ответ (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJSUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 300,
+  "refresh_expires_in": 1800,
+  "user": {
+    "sub": "b2f67ac1-4321-...",
+    "username": "aitu3",
+    "email": "aitu3@example.com",
+    "name": "Aitu User",
+    "roles": ["user"]
+  }
+}
+```
+
+---
+
+### 2. Обмен ID-токена на собственные токены Second
 `POST /api/auth/exchange`
 
 **Запрос:**

@@ -1,10 +1,12 @@
 package com.example.second.controller;
 
+import com.example.second.dto.ExchangeAccessTokenRequest;
 import com.example.second.dto.ExchangeTokenRequest;
 import com.example.second.dto.RefreshTokenRequest;
 import com.example.second.dto.TokenExchangeResponse;
 import com.example.second.dto.UserInfoDto;
 import com.example.second.service.IdTokenValidator;
+import com.example.second.service.KeycloakTokenExchangeService;
 import com.example.second.service.SecondTokenService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -20,10 +22,14 @@ public class AuthController {
 
     private final IdTokenValidator idTokenValidator;
     private final SecondTokenService secondTokenService;
+    private final KeycloakTokenExchangeService keycloakTokenExchangeService;
 
-    public AuthController(IdTokenValidator idTokenValidator, SecondTokenService secondTokenService) {
+    public AuthController(IdTokenValidator idTokenValidator,
+                          SecondTokenService secondTokenService,
+                          KeycloakTokenExchangeService keycloakTokenExchangeService) {
         this.idTokenValidator = idTokenValidator;
         this.secondTokenService = secondTokenService;
+        this.keycloakTokenExchangeService = keycloakTokenExchangeService;
     }
 
     /**
@@ -44,6 +50,16 @@ public class AuthController {
     public ResponseEntity<TokenExchangeResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
         log.info("Получен запрос на обновление токенов Second Backend");
         TokenExchangeResponse response = secondTokenService.refresh(request.refreshToken());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Обмен Access Token от Alem на токены Second Backend через Keycloak RFC 8693 Token Exchange.
+     */
+    @PostMapping("/exchange-access-token")
+    public ResponseEntity<TokenExchangeResponse> exchangeAccessToken(@Valid @RequestBody ExchangeAccessTokenRequest request) {
+        log.info("Получен запрос на обмен Access Token через Keycloak RFC 8693 Token Exchange");
+        TokenExchangeResponse response = keycloakTokenExchangeService.exchangeAccessToken(request.accessToken());
         return ResponseEntity.ok(response);
     }
 }
