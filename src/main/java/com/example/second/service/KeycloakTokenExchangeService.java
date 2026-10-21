@@ -45,14 +45,21 @@ public class KeycloakTokenExchangeService {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final SecondTokenService secondTokenService;
 
-    public KeycloakTokenExchangeService() {
+    @org.springframework.beans.factory.annotation.Autowired
+    public KeycloakTokenExchangeService(SecondTokenService secondTokenService) {
         this.restClient = RestClient.builder().build();
         this.objectMapper = new ObjectMapper()
                 .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.secondTokenService = secondTokenService;
     }
 
-    public KeycloakTokenExchangeService(RestClient restClient, String serverUrl, String realm, String clientId, String clientSecret) {
+    public KeycloakTokenExchangeService() {
+        this(null);
+    }
+
+    public KeycloakTokenExchangeService(RestClient restClient, String serverUrl, String realm, String clientId, String clientSecret, SecondTokenService secondTokenService) {
         this.restClient = restClient;
         this.objectMapper = new ObjectMapper()
                 .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -60,6 +67,7 @@ public class KeycloakTokenExchangeService {
         this.realm = realm;
         this.clientId = clientId;
         this.clientSecret = clientSecret;
+        this.secondTokenService = secondTokenService;
     }
 
     /**
@@ -78,8 +86,7 @@ public class KeycloakTokenExchangeService {
         }
         form.add("subject_token", subjectAccessToken.trim());
         form.add("subject_token_type", TOKEN_TYPE_ACCESS_TOKEN);
-        form.add("audience", clientId);
-        form.add("requested_token_type", TOKEN_TYPE_REFRESH_TOKEN);
+        form.add("requested_token_type", TOKEN_TYPE_ACCESS_TOKEN);
 
         String tokenUrl = String.format("%s/realms/%s/protocol/openid-connect/token", serverUrl, realm);
 
@@ -98,13 +105,17 @@ public class KeycloakTokenExchangeService {
             String refreshToken = root.path("refresh_token").asText(null);
             String tokenType = root.path("token_type").asText("Bearer");
             long expiresIn = root.path("expires_in").asLong(300);
-            long refreshExpiresIn = root.path("refresh_expires_in").asLong(1800);
+            long refreshExpiresIn = root.path("refresh_expires_in").asLong(604800);
 
             if (accessToken == null || accessToken.isBlank()) {
                 throw new AuthException("Keycloak не вернул access_token в ответе Token Exchange", HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
             UserInfoDto userInfo = extractUserInfoFromToken(accessToken);
+
+            if ((refreshToken == null || refreshToken.isBlank()) && secondTokenService != null) {
+                refreshToken = secondTokenService.generateRefreshToken(userInfo);
+            }
 
             log.info("Token Exchange в Keycloak успешно выполнен для пользователя '{}' (sub={})",
                     userInfo.username(), userInfo.sub());
@@ -195,15 +206,23 @@ public class KeycloakTokenExchangeService {
         if (errorBody == null || errorBody.isBlank()) {
             return "Неизвестная ошибка Keycloak";
         }
+        String errorMsg = errorBody;
         try {
             JsonNode node = objectMapper.readTree(errorBody);
             if (node.has("error_description")) {
-                return node.get("error_description").asText();
-            }
-            if (node.has("error")) {
-                return node.get("error").asText();
+                errorMsg = node.get("error_description").asText();
+            } else if (node.has("error")) {
+                errorMsg = node.get("error").asText();
             }
         } catch (Exception ignored) {}
-        return errorBody;
+
+        if (errorMsg.contains("Standard token exchange is not enabled")) {
+            return errorMsg + ". Включите Standard Token Exchange в Keycloak: Clients -> " + clientId + " -> Settings -> Capability config -> Standard Token Exchange: On.";
+        }
+        if (errorMsg.contains("Requested audience not available")) {
+            return errorMsg + ". Убедитесь, что в клиенте test-app добавлен Audience Mapper для " + clientId + ".";
+        }
+
+        return errorMsg;
     }
 }
