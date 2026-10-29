@@ -11,7 +11,6 @@ import java.util.List;
 public record TokenInfoResponse(
     @Schema(description = "Алгоритм подписи из заголовка JWT", example = "RS256") String alg,
     @Schema(description = "Идентификатор ключа из заголовка JWT", example = "Xx9kQ...") String kid,
-    @Schema(description = "keycloak (RS256) или second-legacy (HS256)", example = "keycloak") String kind,
     TokenSummaryDto claims,
     List<TokenCheckDto> checks,
     @JsonProperty("accepted_by_me")

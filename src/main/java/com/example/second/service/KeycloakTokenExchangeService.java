@@ -3,7 +3,6 @@ package com.example.second.service;
 import com.example.second.dto.ExchangeDetailsDto;
 import com.example.second.dto.IntrospectionResponse;
 import com.example.second.dto.KeycloakTokenResponse;
-import com.example.second.dto.TokenExchangeResponse;
 import com.example.second.dto.TokenSummaryDto;
 import com.example.second.dto.UserInfoDto;
 import com.example.second.exception.AuthException;
@@ -111,15 +110,6 @@ public class KeycloakTokenExchangeService {
         log.info("Token Exchange выполнен: пользователь '{}' получил токен azp={}",
                 issued.user().username(), issued.exchange().issued() != null ? issued.exchange().issued().azp() : "?");
         return issued;
-    }
-
-    /**
-     * Legacy-формат ответа для POST /api/auth/exchange-access-token.
-     */
-    public TokenExchangeResponse exchangeAccessToken(String subjectToken) {
-        KeycloakTokenResponse r = exchange(subjectToken, null, null);
-        return new TokenExchangeResponse(r.accessToken(), r.refreshToken(), r.tokenType(),
-                r.expiresIn(), r.refreshExpiresIn(), r.user());
     }
 
     /**

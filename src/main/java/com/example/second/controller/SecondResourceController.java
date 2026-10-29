@@ -2,16 +2,11 @@ package com.example.second.controller;
 
 import com.example.second.config.OpenApiConfig;
 import com.example.second.dto.ApiResponse;
-import com.example.second.dto.TokenCheckDto;
 import com.example.second.dto.TokenInfoResponse;
-import com.example.second.dto.UserInfoDto;
 import com.example.second.exception.AuthException;
 import com.example.second.service.KeycloakTokenValidator;
-import com.example.second.service.SecondTokenService;
 import com.example.second.service.TokenClaimsMapper;
-import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -29,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.text.ParseException;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,34 +33,26 @@ import java.util.Map;
 @RequestMapping("/api/second")
 public class SecondResourceController {
 
-    private static final String KIND_KEYCLOAK = "keycloak";
-    private static final String KIND_SECOND_LEGACY = "second-legacy";
-
-    private final SecondTokenService secondTokenService;
     private final KeycloakTokenValidator keycloakTokenValidator;
     private final String clientId;
 
-    public SecondResourceController(SecondTokenService secondTokenService,
-                                    KeycloakTokenValidator keycloakTokenValidator,
+    public SecondResourceController(KeycloakTokenValidator keycloakTokenValidator,
                                     @Value("${keycloak.client-id:second-backend}") String clientId) {
-        this.secondTokenService = secondTokenService;
         this.keycloakTokenValidator = keycloakTokenValidator;
         this.clientId = clientId;
     }
 
     /**
-     * Защищённый эндпоинт. Принимает Keycloak RS256 токены, выданные именно second-backend (azp),
-     * и legacy HS256 токены, выпущенные самим second-backend через /api/auth/exchange.
+     * Защищённый эндпоинт. Принимает только Keycloak RS256 токены, выданные клиенту second-backend (azp).
      */
     @GetMapping("/me")
     @Tag(name = "2. Protected", description = "Ресурсы second-backend, доступные только с токеном second-backend")
     @Operation(
             summary = "Защищённый ресурс: кто я",
             description = """
-                    Требует `Authorization: Bearer <token>`. Принимаются:
-                    - **Keycloak RS256** токен с `azp=second-backend` — результат `POST /api/auth/token-exchange`.
-                      Проверяются подпись (JWKS Keycloak), `iss`, `exp` и `azp`.
-                    - **Legacy HS256** токен second-backend из `POST /api/auth/exchange`.
+                    Требует `Authorization: Bearer <token>` — Keycloak RS256 токен с `azp=second-backend`,
+                    полученный через `POST /api/auth/token-exchange`.
+                    Проверяются подпись (JWKS Keycloak), `iss`, `exp` и `azp`.
 
                     Исходный токен alem (`azp=test-app`) отклоняется с 401 — так можно убедиться,
                     что обмен действительно нужен и работает. Причину отказа подробно показывает `GET /api/second/token-info`.
@@ -81,7 +67,6 @@ public class SecondResourceController {
                               "message": "Успешная авторизация в Second Backend",
                               "data": {
                                 "service": "second-backend",
-                                "token_kind": "keycloak",
                                 "issuer": "http://localhost:8180/realms/GovApps",
                                 "azp": "second-backend",
                                 "audience": ["account"],
@@ -103,28 +88,16 @@ public class SecondResourceController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMe(
             @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
 
-        String token = extractBearer(authHeader);
-        boolean keycloakToken = isRsaToken(token);
-
-        JWTClaimsSet claims;
-        UserInfoDto user;
-        if (keycloakToken) {
-            claims = keycloakTokenValidator.validate(token, clientId);
-            user = TokenClaimsMapper.extractUser(claims, clientId);
-        } else {
-            claims = secondTokenService.validateToken(token, "access");
-            user = secondTokenService.extractUser(claims);
-        }
+        JWTClaimsSet claims = keycloakTokenValidator.validate(extractBearer(authHeader), clientId);
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("service", "second-backend");
-        data.put("token_kind", keycloakToken ? KIND_KEYCLOAK : KIND_SECOND_LEGACY);
-        data.put("issuer", claims.getIssuer() != null ? claims.getIssuer() : "—");
-        data.put("azp", claims.getClaim("azp") != null ? claims.getClaim("azp") : "—");
+        data.put("issuer", claims.getIssuer());
+        data.put("azp", claims.getClaim("azp"));
         data.put("audience", claims.getAudience() != null ? claims.getAudience() : List.of());
-        data.put("expires_at", claims.getExpirationTime() != null ? claims.getExpirationTime().toInstant().toString() : "—");
+        data.put("expires_at", TokenClaimsMapper.isoDate(claims.getExpirationTime()));
         data.put("authorized_at", Instant.now().toString());
-        data.put("user", user);
+        data.put("user", TokenClaimsMapper.extractUser(claims, clientId));
 
         return ResponseEntity.ok(ApiResponse.ok("Успешная авторизация в Second Backend", data));
     }
@@ -147,7 +120,6 @@ public class SecondResourceController {
                             {
                               "alg": "RS256",
                               "kid": "Xx9kQ...",
-                              "kind": "keycloak",
                               "claims": {"iss": "http://localhost:8180/realms/GovApps", "azp": "test-app", "aud": ["second-backend", "account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:05:00Z"},
                               "checks": [
                                 {"name": "format", "passed": true, "detail": "JWT распарсен"},
@@ -164,34 +136,18 @@ public class SecondResourceController {
     public ResponseEntity<TokenInfoResponse> tokenInfo(
             @Parameter(hidden = true) @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader) {
 
-        String token = extractBearer(authHeader);
+        KeycloakTokenValidator.ValidationReport report = keycloakTokenValidator.inspect(extractBearer(authHeader), clientId);
 
-        SignedJWT jwt;
-        try {
-            jwt = SignedJWT.parse(token);
-        } catch (ParseException e) {
-            return ResponseEntity.ok(new TokenInfoResponse(null, null, null, null,
-                    List.of(TokenCheckDto.fail(KeycloakTokenValidator.CHECK_FORMAT, "Некорректный JWT: " + e.getMessage())), false));
+        String alg = null;
+        String kid = null;
+        if (report.jwt() != null) {
+            alg = report.jwt().getHeader().getAlgorithm() != null ? report.jwt().getHeader().getAlgorithm().getName() : null;
+            kid = report.jwt().getHeader().getKeyID();
         }
 
-        String alg = jwt.getHeader().getAlgorithm() != null ? jwt.getHeader().getAlgorithm().getName() : null;
-        String kid = jwt.getHeader().getKeyID();
-
-        if (isRsaToken(token)) {
-            KeycloakTokenValidator.ValidationReport report = keycloakTokenValidator.inspect(token, clientId);
-            return ResponseEntity.ok(new TokenInfoResponse(alg, kid, KIND_KEYCLOAK,
-                    TokenClaimsMapper.summarize(report.claims()), report.checks(), report.passed()));
-        }
-
-        TokenCheckDto legacyCheck;
-        try {
-            secondTokenService.validateToken(token, "access");
-            legacyCheck = TokenCheckDto.ok("second_hs256", "Валидный HS256 access token second-backend");
-        } catch (AuthException e) {
-            legacyCheck = TokenCheckDto.fail("second_hs256", e.getMessage());
-        }
-        return ResponseEntity.ok(new TokenInfoResponse(alg, kid, KIND_SECOND_LEGACY,
-                TokenClaimsMapper.summarize(token), List.of(legacyCheck), legacyCheck.passed()));
+        return ResponseEntity.ok(new TokenInfoResponse(alg, kid,
+                report.claims() != null ? TokenClaimsMapper.summarize(report.claims()) : null,
+                report.checks(), report.passed()));
     }
 
     private static String extractBearer(String authHeader) {
@@ -200,13 +156,5 @@ public class SecondResourceController {
                     HttpStatus.UNAUTHORIZED);
         }
         return authHeader.substring(7).trim();
-    }
-
-    private static boolean isRsaToken(String token) {
-        try {
-            return JWSAlgorithm.Family.RSA.contains(SignedJWT.parse(token).getHeader().getAlgorithm());
-        } catch (ParseException e) {
-            return false;
-        }
     }
 }

@@ -26,11 +26,10 @@ class OpenApiDocsTest {
 
         for (String path : new String[]{
                 "/api/auth/token-exchange", "/api/auth/token-exchange/refresh", "/api/auth/token-exchange/introspect",
-                "/api/second/me", "/api/second/token-info",
-                "/api/auth/exchange", "/api/auth/refresh", "/api/auth/exchange-access-token"}) {
+                "/api/second/me", "/api/second/token-info"}) {
             assertTrue(paths.has(path), "Нет пути в OpenAPI: " + path);
         }
-        assertTrue(paths.path("/api/auth/exchange-access-token").path("post").path("deprecated").asBoolean());
+        assertEquals(5, paths.size(), "Лишние пути в OpenAPI: " + paths.fieldNames().next());
         assertEquals("bearer", docs.path("components").path("securitySchemes").path("bearerAuth").path("scheme").asText());
 
         String ui = client.get().uri("/swagger-ui/index.html").retrieve().body(String.class);

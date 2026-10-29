@@ -5,9 +5,6 @@ spring:
   application:
     name: second
 
-alem:
-  jwks-url: http://localhost:8080/api/auth/jwks
-
 keycloak:
   server-url: http://localhost:8180
   realm: GovApps
@@ -22,13 +19,6 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha
-
-jwt:
-  secret: second-backend-super-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256
-  issuer: second-backend
-  audience: second-service
-  access-token-expiration-seconds: 900       # 15 minutes
-  refresh-token-expiration-seconds: 604800   # 7 days
 
 cors:
   allowed-origins:

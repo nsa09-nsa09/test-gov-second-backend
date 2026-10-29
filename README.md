@@ -37,11 +37,8 @@ Swagger UI: http://localhost:8081/swagger-ui.html · OpenAPI: http://localhost:8
 | POST | `/api/auth/token-exchange` | RFC 8693 обмен токена alem на токен second-backend |
 | POST | `/api/auth/token-exchange/refresh` | Обновление токена second-backend по refresh_token Keycloak |
 | POST | `/api/auth/token-exchange/introspect` | Keycloak introspection от имени second-backend |
-| GET | `/api/second/me` | Защищённый ресурс: только токены с `azp=second-backend` (или legacy HS256) |
+| GET | `/api/second/me` | Защищённый ресурс: только токены с `azp=second-backend` |
 | GET | `/api/second/token-info` | Отладка: примет ли `/me` токен и какие проверки не прошли |
-| POST | `/api/auth/exchange` | Legacy: id_token → собственные HS256-токены |
-| POST | `/api/auth/refresh` | Legacy: обновление HS256-токенов |
-| POST | `/api/auth/exchange-access-token` | Deprecated: алиас `/token-exchange` в старом формате ответа |
 
 ### `POST /api/auth/token-exchange`
 
@@ -106,95 +103,6 @@ curl -s -X POST http://localhost:8081/api/auth/token-exchange/introspect -H 'Con
 
 ---
 
-## Legacy API (HS256-токены second-backend)
-
-### Обмен ID-токена на собственные HS256-токены Second
-`POST /api/auth/exchange`
-
-**Запрос:**
-```json
-{
-  "id_token": "eyJhbGciOiJSUzI1NiIs..."
-}
-```
-
-**Ответ (200 OK):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "refresh_expires_in": 604800,
-  "user": {
-    "sub": "b2f67ac1-4321-...",
-    "username": "aitu3",
-    "email": "aitu3@example.com",
-    "name": "Aitu User",
-    "roles": ["user", "offline_access"]
-  }
-}
-```
-
----
-
-### Обновление HS256-токенов по Refresh Token
-`POST /api/auth/refresh`
-
-**Запрос:**
-```json
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-**Ответ (200 OK):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "refresh_expires_in": 604800,
-  "user": {
-    "sub": "b2f67ac1-4321-...",
-    "username": "aitu3"
-  }
-}
-```
-
----
-
-### Защищенный ресурс с HS256-токеном
-`GET /api/second/me`
-
-**Заголовок:**
-```http
-Authorization: Bearer <second_access_token>
-```
-
-**Ответ (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Успешная авторизация в Second Backend",
-  "data": {
-    "service": "second-backend",
-    "issuer": "second-backend",
-    "audience": ["second-service"],
-    "authorized_at": "2026-10-07T08:50:00Z",
-    "user": {
-      "sub": "b2f67ac1-4321-...",
-      "username": "aitu3",
-      "email": "aitu3@example.com",
-      "roles": ["user"]
-    }
-  }
-}
-```
-
----
-
 ## Конфигурация (`application.yaml`)
 
 ```yaml
@@ -205,9 +113,6 @@ spring:
   application:
     name: second
 
-alem:
-  jwks-url: http://localhost:8080/api/auth/jwks
-
 keycloak:
   server-url: http://localhost:8180
   realm: GovApps
@@ -215,13 +120,6 @@ keycloak:
   client-secret: <secret из Clients → second-backend → Credentials>
   issuer: ${keycloak.server-url}/realms/${keycloak.realm}
   jwks-url: ${keycloak.server-url}/realms/${keycloak.realm}/protocol/openid-connect/certs
-
-jwt:
-  secret: second-backend-super-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256
-  issuer: second-backend
-  audience: second-service
-  access-token-expiration-seconds: 900       # 15 минут
-  refresh-token-expiration-seconds: 604800   # 7 дней
 
 cors:
   allowed-origins:
@@ -246,3 +144,11 @@ cors:
 ./mvnw spring-boot:run
 ```
 Сервис запустится на порту `8081`.
+
+### Запуск в Docker
+```bash
+docker build -t govapps-second:local .
+docker run --rm -p 8081:8081 -e LOCAL_FORWARD=8180:host.docker.internal:8180 govapps-second:local
+```
+`LOCAL_FORWARD` пробрасывает `127.0.0.1:8180` внутри контейнера на Keycloak хоста, чтобы сервис обращался к Keycloak
+по `http://localhost:8180`, как и браузер: тогда issuer токенов совпадает у всех участников обмена.

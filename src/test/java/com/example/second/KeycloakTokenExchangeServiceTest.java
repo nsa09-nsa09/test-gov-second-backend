@@ -2,7 +2,6 @@ package com.example.second;
 
 import com.example.second.dto.IntrospectionResponse;
 import com.example.second.dto.KeycloakTokenResponse;
-import com.example.second.dto.TokenExchangeResponse;
 import com.example.second.exception.AuthException;
 import com.example.second.service.KeycloakJwksService;
 import com.example.second.service.KeycloakTokenExchangeService;
@@ -106,7 +105,7 @@ class KeycloakTokenExchangeServiceTest {
     @DisplayName("Пустой subject_token → 400 без запроса в Keycloak")
     void exchangeEmpty() {
         assertEquals(HttpStatus.BAD_REQUEST, assertThrows(AuthException.class, () -> service.exchange(" ", null, null)).getStatus());
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(AuthException.class, () -> service.exchangeAccessToken(null)).getStatus());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(AuthException.class, () -> service.exchange(null, null, null)).getStatus());
         server.verify();
     }
 
@@ -179,18 +178,6 @@ class KeycloakTokenExchangeServiceTest {
 
         AuthException ex = assertThrows(AuthException.class, () -> service.exchange(TestTokens.alemToken(), null, null));
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, ex.getStatus());
-    }
-
-    @Test
-    @DisplayName("Legacy exchangeAccessToken возвращает старый формат")
-    void legacyExchange() {
-        server.expect(requestTo(TOKEN_URL)).andRespond(withSuccess("""
-                {"access_token": "%s", "expires_in": 300}
-                """.formatted(TestTokens.secondToken()), MediaType.APPLICATION_JSON));
-
-        TokenExchangeResponse r = service.exchangeAccessToken(TestTokens.alemToken());
-        assertEquals("aitu3", r.user().username());
-        assertNull(r.refreshToken());
     }
 
     @Test
