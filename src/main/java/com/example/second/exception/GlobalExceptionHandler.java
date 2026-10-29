@@ -32,7 +32,7 @@ public class GlobalExceptionHandler {
             errors.put(error.getField(), error.getDefaultMessage());
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.ok("Validation failed", errors));
+                .body(new ApiResponse<>(false, "Validation failed", errors));
     }
 
     @ExceptionHandler(Exception.class)

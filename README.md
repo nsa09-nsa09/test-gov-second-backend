@@ -1,140 +1,104 @@
 # Second Backend Service (GovApps Token Exchange)
 
-Микросервис на Spring Boot (Java 25) для обмена OIDC ID-токенов, полученных от Keycloak / Alem Gateway, на собственные токены сервиса (Access и Refresh) с верификацией цифровой подписи через JWKS Alem backend.
+Микросервис на Spring Boot (Java 25). Получает access token, выданный **alem** (клиент Keycloak `test-app`),
+и через **RFC 8693 Standard Token Exchange** в Keycloak получает собственный токен клиента `second-backend`.
+
+Swagger UI: http://localhost:8081/swagger-ui.html · OpenAPI: http://localhost:8081/v3/api-docs
+(Swagger alem: http://localhost:8080/swagger-ui.html)
 
 ---
 
-## Архитектура и принцип работы
+## Поток Token Exchange
 
-1. Пользователь проходит аутентификацию в системе (через Keycloak или BFF Gateway `alem`).
-2. Клиентское приложение получает `id_token` (подписанный Keycloak RSA-ключом).
-3. Клиент отправляет `id_token` в **Second Backend** (`POST /api/auth/exchange`).
-4. **Second Backend** запрашивает и кэширует публичные ключи JWKS с эндпоинта `alem` (`http://localhost:8080/api/auth/jwks`).
-5. **Second Backend** валидирует криптографическую подпись RS256, сроки действия (`exp`, `nbf`) и извлекает информацию о пользователе (`sub`, `username`, `email`, `roles`).
-6. После успешной валидации **Second Backend** выпускает свою пару токенов:
-   - **Access Token** (JWT, HS256, TTL: 15 минут) с `issuer: "second-backend"`, `audience: "second-service"`.
-   - **Refresh Token** (JWT, HS256, TTL: 7 дней).
-7. Клиент может обращаться к защищенным API Second Backend с полученным `Authorization: Bearer <second_access_token>`, а также обновлять токены через `POST /api/auth/refresh`.
+```
+1. Frontend → alem   POST /api/auth/login              → access_token A (azp=test-app, aud∋second-backend)
+2. Frontend → second POST /api/auth/token-exchange {A}
+3. second   → Keycloak grant_type=token-exchange, subject_token=A, client=second-backend (+secret)
+4. Keycloak → second access_token B (azp=second-backend)
+5. Frontend → second GET /api/second/me  Bearer B → 200
+                     GET /api/second/me  Bearer A → 401 (токен выдан не для second-backend)
+```
+
+Перед запросом в Keycloak second проверяет subject_token локально: подпись RS256 по JWKS Keycloak
+(`/realms/GovApps/protocol/openid-connect/certs`), `iss`, `exp` и наличие `second-backend` в `aud`.
+
+### Настройки Keycloak (realm GovApps)
+- Клиент `second-backend`: Client authentication = On, **Standard Token Exchange = On**.
+- Клиент `test-app`: Audience mapper, добавляющий `second-backend` в `aud` access token.
+- Опционально (refresh_token после обмена): `second-backend` → Advanced →
+  *Allow refresh token in Standard Token Exchange* = Same session, и в запросе `requested_token_type=refresh_token`.
 
 ---
 
-## REST API Эндпоинты
+## REST API
 
-### 1. Keycloak RFC 8693 Token Exchange (Обмен Access Token от Alem на токены Second)
-`POST /api/auth/exchange-access-token`
+| Метод | Путь | Описание |
+|---|---|---|
+| POST | `/api/auth/token-exchange` | RFC 8693 обмен токена alem на токен second-backend |
+| POST | `/api/auth/token-exchange/refresh` | Обновление токена second-backend по refresh_token Keycloak |
+| POST | `/api/auth/token-exchange/introspect` | Keycloak introspection от имени second-backend |
+| GET | `/api/second/me` | Защищённый ресурс: только токены с `azp=second-backend` |
+| GET | `/api/second/token-info` | Отладка: примет ли `/me` токен и какие проверки не прошли |
 
-Отправляет полученный от `alem` `access_token` в Keycloak по стандарту **OAuth 2.0 RFC 8693 Token Exchange**. Keycloak проверяет аудиторию (`aud`) и права, после чего сам выпускает пару токенов для клиента `second-backend`.
+### `POST /api/auth/token-exchange`
 
-**Запрос:**
+`subject_token` — в теле или в заголовке `Authorization: Bearer`.
+
 ```json
 {
-  "access_token": "eyJhbGciOiJSUzI1NiIs..."
+  "subject_token": "eyJhbGciOiJSUzI1NiIs...",
+  "scope": "openid profile",
+  "requested_token_type": "access_token"
 }
 ```
 
-**Ответ (200 OK):**
+Ответ `200`:
 ```json
 {
   "access_token": "eyJhbGciOiJSUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJSUzI1NiIs...",
   "token_type": "Bearer",
   "expires_in": 300,
-  "refresh_expires_in": 1800,
-  "user": {
-    "sub": "b2f67ac1-4321-...",
-    "username": "aitu3",
-    "email": "aitu3@example.com",
-    "name": "Aitu User",
-    "roles": ["user"]
-  }
+  "refresh_expires_in": 0,
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "user": { "sub": "b2f67ac1-...", "username": "aitu3", "roles": ["user"] },
+  "exchange": {
+    "subject": { "azp": "test-app",       "aud": ["second-backend", "account"], "...": "..." },
+    "issued":  { "azp": "second-backend", "aud": ["account"],                   "...": "..." }
+  },
+  "hint": "Keycloak не выдал refresh_token. ..."
 }
 ```
 
----
+Ошибки (`{"success": false, "message": "..."}`):
 
-### 2. Обмен ID-токена на собственные токены Second
-`POST /api/auth/exchange`
+| Код | Причина |
+|---|---|
+| 400 | Нет subject_token; Keycloak вернул `invalid_request` / `invalid_token` / `invalid_grant` |
+| 401 | subject_token не прошёл проверку (подпись, iss, exp); `invalid_client` (неверный secret) |
+| 403 | В `aud` нет `second-backend`; Keycloak вернул `access_denied` / `unauthorized_client` (Standard Token Exchange выключен) |
+| 502 | Keycloak вернул 5xx или некорректный ответ |
+| 503 | Keycloak недоступен |
 
-**Запрос:**
-```json
-{
-  "id_token": "eyJhbGciOiJSUzI1NiIs..."
-}
-```
+### Проверка вручную (curl)
 
-**Ответ (200 OK):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "refresh_expires_in": 604800,
-  "user": {
-    "sub": "b2f67ac1-4321-...",
-    "username": "aitu3",
-    "email": "aitu3@example.com",
-    "name": "Aitu User",
-    "roles": ["user", "offline_access"]
-  }
-}
-```
+```bash
+# 1. Токен alem
+A=$(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"<user>","password":"<password>"}' | jq -r .access_token)
 
----
+# 2. Токен alem в /me отклоняется (401), token-info показывает почему
+curl -s http://localhost:8081/api/second/me -H "Authorization: Bearer $A" | jq
+curl -s http://localhost:8081/api/second/token-info -H "Authorization: Bearer $A" | jq
 
-### 2. Обновление токенов по Refresh Token
-`POST /api/auth/refresh`
+# 3. Обмен
+B=$(curl -s -X POST http://localhost:8081/api/auth/token-exchange -H 'Content-Type: application/json' \
+  -d "{\"subject_token\":\"$A\"}" | tee /dev/stderr | jq -r .access_token)
 
-**Запрос:**
-```json
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
+# 4. Обменянный токен принимается (200)
+curl -s http://localhost:8081/api/second/me -H "Authorization: Bearer $B" | jq
 
-**Ответ (200 OK):**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
-  "token_type": "Bearer",
-  "expires_in": 900,
-  "refresh_expires_in": 604800,
-  "user": {
-    "sub": "b2f67ac1-4321-...",
-    "username": "aitu3"
-  }
-}
-```
-
----
-
-### 3. Защищенный ресурс (Проверка авторизации)
-`GET /api/second/me`
-
-**Заголовок:**
-```http
-Authorization: Bearer <second_access_token>
-```
-
-**Ответ (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Успешная авторизация в Second Backend",
-  "data": {
-    "service": "second-backend",
-    "issuer": "second-backend",
-    "audience": ["second-service"],
-    "authorized_at": "2026-10-07T08:50:00Z",
-    "user": {
-      "sub": "b2f67ac1-4321-...",
-      "username": "aitu3",
-      "email": "aitu3@example.com",
-      "roles": ["user"]
-    }
-  }
-}
+# 5. Introspection: client_id/azp у A — test-app, у B — second-backend
+curl -s -X POST http://localhost:8081/api/auth/token-exchange/introspect -H 'Content-Type: application/json' -d "{\"token\":\"$B\"}" | jq
 ```
 
 ---
@@ -149,15 +113,13 @@ spring:
   application:
     name: second
 
-alem:
-  jwks-url: http://localhost:8080/api/auth/jwks
-
-jwt:
-  secret: second-backend-super-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256
-  issuer: second-backend
-  audience: second-service
-  access-token-expiration-seconds: 900       # 15 минут
-  refresh-token-expiration-seconds: 604800   # 7 дней
+keycloak:
+  server-url: http://localhost:8180
+  realm: GovApps
+  client-id: second-backend
+  client-secret: <secret из Clients → second-backend → Credentials>
+  issuer: ${keycloak.server-url}/realms/${keycloak.realm}
+  jwks-url: ${keycloak.server-url}/realms/${keycloak.realm}/protocol/openid-connect/certs
 
 cors:
   allowed-origins:
@@ -182,3 +144,11 @@ cors:
 ./mvnw spring-boot:run
 ```
 Сервис запустится на порту `8081`.
+
+### Запуск в Docker
+```bash
+docker build -t govapps-second:local .
+docker run --rm -p 8081:8081 -e LOCAL_FORWARD=8180:host.docker.internal:8180 govapps-second:local
+```
+`LOCAL_FORWARD` пробрасывает `127.0.0.1:8180` внутри контейнера на Keycloak хоста, чтобы сервис обращался к Keycloak
+по `http://localhost:8180`, как и браузер: тогда issuer токенов совпадает у всех участников обмена.
