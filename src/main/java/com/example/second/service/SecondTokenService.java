@@ -89,13 +89,6 @@ public class SecondTokenService {
     }
 
     /**
-     * Выпуск refresh-токена для пользователя (используется при обмене access_token).
-     */
-    public String generateRefreshToken(UserInfoDto user) {
-        return generateToken(user, "refresh", refreshExpirySeconds);
-    }
-
-    /**
      * Валидация токена Second Backend по секретному ключу и проверке срока действия.
      */
     public JWTClaimsSet validateToken(String tokenString, String expectedType) {

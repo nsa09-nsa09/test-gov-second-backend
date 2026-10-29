@@ -1,7 +1,9 @@
 package com.example.second.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 
+@Schema(description = "Пара токенов (legacy-формат)")
 public record TokenExchangeResponse(
     @JsonProperty("access_token")
     String accessToken,
