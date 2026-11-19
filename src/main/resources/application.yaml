@@ -1,12 +1,12 @@
 server:
-  port: 8081
+  port: 18641
 
 spring:
   application:
     name: second
 
 keycloak:
-  server-url: http://localhost:8180
+  server-url: http://localhost:18630
   realm: GovApps
   client-id: second-backend
   client-secret: wCEkTsw9Fyi8fwvLO1MSuPzf4uX4N6rVFGJqphCdPuTWEt4awJgkmtRm5WndaQZ6VwxtTHKYPLtELbuWVTPVdn
@@ -22,4 +22,4 @@ springdoc:
 
 cors:
   allowed-origins:
-    - http://localhost:5173
+    - http://localhost:18650

@@ -73,8 +73,8 @@ public class TokenExchangeController {
                               "scope": "profile email",
                               "user": {"sub": "b2f67ac1-...", "username": "aitu3", "email": "aitu3@example.com", "name": "Aitu User", "roles": ["user"]},
                               "exchange": {
-                                "subject": {"iss": "http://localhost:8180/realms/GovApps", "azp": "test-app", "aud": ["second-backend", "account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:05:00Z"},
-                                "issued":  {"iss": "http://localhost:8180/realms/GovApps", "azp": "second-backend", "aud": ["account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:06:00Z"}
+                                "subject": {"iss": "http://localhost:18630/realms/GovApps", "azp": "test-app", "aud": ["second-backend", "account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:05:00Z"},
+                                "issued":  {"iss": "http://localhost:18630/realms/GovApps", "azp": "second-backend", "aud": ["account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:06:00Z"}
                               },
                               "hint": "Keycloak не выдал refresh_token. ..."
                             }"""))),
@@ -89,7 +89,7 @@ public class TokenExchangeController {
                             {"success": false, "message": "subject_token не адресован клиенту second-backend (aud=[account]). Добавьте Audience mapper 'second-backend' в клиент, выдавший токен (azp=test-app)"}"""))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak недоступен",
                     content = @Content(schema = @Schema(implementation = ApiResponse.class), examples = @ExampleObject("""
-                            {"success": false, "message": "Не удалось связаться с Keycloak (http://localhost:8180/...): Connection refused"}""")))
+                            {"success": false, "message": "Не удалось связаться с Keycloak (http://localhost:18630/...): Connection refused"}""")))
     })
     public ResponseEntity<KeycloakTokenResponse> exchange(
             @RequestBody(required = false) TokenExchangeRequest request,
@@ -147,7 +147,7 @@ public class TokenExchangeController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Результат introspection",
                     content = @Content(schema = @Schema(implementation = IntrospectionResponse.class), examples = {
                             @ExampleObject(name = "Активный токен second-backend", value = """
-                                    {"active": true, "client_id": "second-backend", "azp": "second-backend", "sub": "b2f67ac1-...", "username": "aitu3", "token_type": "Bearer", "iss": "http://localhost:8180/realms/GovApps", "exp": "2026-10-29T18:06:00Z"}"""),
+                                    {"active": true, "client_id": "second-backend", "azp": "second-backend", "sub": "b2f67ac1-...", "username": "aitu3", "token_type": "Bearer", "iss": "http://localhost:18630/realms/GovApps", "exp": "2026-10-29T18:06:00Z"}"""),
                             @ExampleObject(name = "Неактивный токен", value = """
                                     {"active": false}""")
                     })),

@@ -9,7 +9,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Ключевые claims JWT (без подписи), чтобы сравнить токены до и после обмена")
 public record TokenSummaryDto(
-    @Schema(example = "http://localhost:8180/realms/GovApps") String iss,
+    @Schema(example = "http://localhost:18630/realms/GovApps") String iss,
     @Schema(description = "Authorized party: клиент, которому выдан токен", example = "second-backend") String azp,
     @Schema(example = "[\"second-backend\"]") List<String> aud,
     @Schema(example = "b2f67ac1-4321-4b7c-9a1e-0c3f5d6e7a8b") String sub,

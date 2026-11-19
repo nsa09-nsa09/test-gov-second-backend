@@ -3,8 +3,8 @@
 Микросервис на Spring Boot (Java 25). Получает access token, выданный **alem** (клиент Keycloak `test-app`),
 и через **RFC 8693 Standard Token Exchange** в Keycloak получает собственный токен клиента `second-backend`.
 
-Swagger UI: http://localhost:8081/swagger-ui.html · OpenAPI: http://localhost:8081/v3/api-docs
-(Swagger alem: http://localhost:8080/swagger-ui.html)
+Swagger UI: http://localhost:18641/swagger-ui.html · OpenAPI: http://localhost:18641/v3/api-docs
+(Swagger alem: http://localhost:18640/swagger-ui.html)
 
 ---
 
@@ -83,22 +83,22 @@ Swagger UI: http://localhost:8081/swagger-ui.html · OpenAPI: http://localhost:8
 
 ```bash
 # 1. Токен alem
-A=$(curl -s -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+A=$(curl -s -X POST http://localhost:18640/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"<user>","password":"<password>"}' | jq -r .access_token)
 
 # 2. Токен alem в /me отклоняется (401), token-info показывает почему
-curl -s http://localhost:8081/api/second/me -H "Authorization: Bearer $A" | jq
-curl -s http://localhost:8081/api/second/token-info -H "Authorization: Bearer $A" | jq
+curl -s http://localhost:18641/api/second/me -H "Authorization: Bearer $A" | jq
+curl -s http://localhost:18641/api/second/token-info -H "Authorization: Bearer $A" | jq
 
 # 3. Обмен
-B=$(curl -s -X POST http://localhost:8081/api/auth/token-exchange -H 'Content-Type: application/json' \
+B=$(curl -s -X POST http://localhost:18641/api/auth/token-exchange -H 'Content-Type: application/json' \
   -d "{\"subject_token\":\"$A\"}" | tee /dev/stderr | jq -r .access_token)
 
 # 4. Обменянный токен принимается (200)
-curl -s http://localhost:8081/api/second/me -H "Authorization: Bearer $B" | jq
+curl -s http://localhost:18641/api/second/me -H "Authorization: Bearer $B" | jq
 
 # 5. Introspection: client_id/azp у A — test-app, у B — second-backend
-curl -s -X POST http://localhost:8081/api/auth/token-exchange/introspect -H 'Content-Type: application/json' -d "{\"token\":\"$B\"}" | jq
+curl -s -X POST http://localhost:18641/api/auth/token-exchange/introspect -H 'Content-Type: application/json' -d "{\"token\":\"$B\"}" | jq
 ```
 
 ---
@@ -107,14 +107,14 @@ curl -s -X POST http://localhost:8081/api/auth/token-exchange/introspect -H 'Con
 
 ```yaml
 server:
-  port: 8081
+  port: 18641
 
 spring:
   application:
     name: second
 
 keycloak:
-  server-url: http://localhost:8180
+  server-url: http://localhost:18630
   realm: GovApps
   client-id: second-backend
   client-secret: <secret из Clients → second-backend → Credentials>
@@ -123,7 +123,7 @@ keycloak:
 
 cors:
   allowed-origins:
-    - http://localhost:5173
+    - http://localhost:18650
 ```
 
 ---
@@ -143,12 +143,12 @@ cors:
 ```bash
 ./mvnw spring-boot:run
 ```
-Сервис запустится на порту `8081`.
+Сервис запустится на порту `18641`.
 
 ### Запуск в Docker
 ```bash
 docker build -t govapps-second:local .
-docker run --rm -p 8081:8081 -e LOCAL_FORWARD=8180:host.docker.internal:8180 govapps-second:local
+docker run --rm -p 18641:18641 -e LOCAL_FORWARD=18630:host.docker.internal:18630 govapps-second:local
 ```
-`LOCAL_FORWARD` пробрасывает `127.0.0.1:8180` внутри контейнера на Keycloak хоста, чтобы сервис обращался к Keycloak
-по `http://localhost:8180`, как и браузер: тогда issuer токенов совпадает у всех участников обмена.
+`LOCAL_FORWARD` пробрасывает `127.0.0.1:18630` внутри контейнера на Keycloak хоста, чтобы сервис обращался к Keycloak
+по `http://localhost:18630`, как и браузер: тогда issuer токенов совпадает у всех участников обмена.

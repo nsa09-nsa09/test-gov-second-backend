@@ -17,7 +17,7 @@ import java.util.Map;
  */
 public final class TestTokens {
 
-    public static final String ISSUER = "http://localhost:8180/realms/GovApps";
+    public static final String ISSUER = "http://localhost:18630/realms/GovApps";
     public static final String KID = "kc-test-key-1";
 
     public static final RSAKey KEY;

@@ -30,7 +30,7 @@ public class KeycloakJwksService {
 
     @Autowired
     public KeycloakJwksService(
-            @Value("${keycloak.jwks-url:http://localhost:8180/realms/GovApps/protocol/openid-connect/certs}") String jwksUrl) {
+            @Value("${keycloak.jwks-url:http://localhost:18630/realms/GovApps/protocol/openid-connect/certs}") String jwksUrl) {
         this(RestClient.builder().build(), jwksUrl);
     }
 

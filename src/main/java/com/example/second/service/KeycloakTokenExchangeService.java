@@ -51,7 +51,7 @@ public class KeycloakTokenExchangeService {
 
     @Autowired
     public KeycloakTokenExchangeService(KeycloakTokenValidator tokenValidator,
-                                        @Value("${keycloak.server-url:http://localhost:8180}") String serverUrl,
+                                        @Value("${keycloak.server-url:http://localhost:18630}") String serverUrl,
                                         @Value("${keycloak.realm:GovApps}") String realm,
                                         @Value("${keycloak.client-id:second-backend}") String clientId,
                                         @Value("${keycloak.client-secret:}") String clientSecret) {
