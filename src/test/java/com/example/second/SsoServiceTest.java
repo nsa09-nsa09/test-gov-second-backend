@@ -1,6 +1,8 @@
 package com.example.second;
 
 import com.example.second.exception.AuthException;
+import com.example.second.service.KeycloakJwksService;
+import com.example.second.service.KeycloakTokenValidator;
 import com.example.second.sso.SsoProperties;
 import com.example.second.sso.SsoRedeemResponse;
 import com.example.second.sso.SsoService;
@@ -8,6 +10,7 @@ import com.example.second.support.TestTokens;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -38,12 +42,15 @@ class SsoServiceTest {
 
     @BeforeEach
     void setUp() {
-        SsoProperties properties = new SsoProperties("aitugovworkspace-backend", "exchange-secret", 60, Map.of(
+        SsoProperties properties = new SsoProperties("test-app", "aitugovworkspace-backend", "exchange-secret", 60, Map.of(
                 "ai-gov", new SsoProperties.Service("http://ai/sso/callback", "ai-secret"),
                 "eotinish", new SsoProperties.Service("http://eo/sso/callback", "eo-secret")));
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        service = new SsoService(builder.build(), properties, "http://kc", "GovApps", clock);
+        KeycloakJwksService jwksService = Mockito.mock(KeycloakJwksService.class);
+        when(jwksService.getKeyByKeyId(TestTokens.KID)).thenReturn(TestTokens.KEY.toPublicJWK());
+        KeycloakTokenValidator validator = new KeycloakTokenValidator(jwksService, TestTokens.ISSUER);
+        service = new SsoService(builder.build(), validator, properties, "second-backend", "http://kc", "GovApps", clock);
     }
 
     @Test
@@ -58,7 +65,7 @@ class SsoServiceTest {
                         "scope", "openid email profile ai-gov-audience")))
                 .andRespond(withSuccess("{\"access_token\":\"" + serviceToken + "\"}", MediaType.APPLICATION_JSON));
 
-        String url = service.start("ai-gov", TestTokens.alemToken());
+        String url = service.start("ai-gov", TestTokens.secondToken(), TestTokens.alemToken());
         assertThat(url).startsWith("http://ai/sso/callback?code=");
         String code = url.substring(url.indexOf("code=") + 5);
 
@@ -99,7 +106,7 @@ class SsoServiceTest {
         server.expect(requestTo(TOKEN_URL))
                 .andRespond(withBadRequest().body("{\"error\":\"invalid_request\",\"error_description\":\"Requested audience not available: ai-gov\"}"));
 
-        assertThatThrownBy(() -> service.start("ai-gov", TestTokens.alemToken()))
+        assertThatThrownBy(() -> service.start("ai-gov", TestTokens.secondToken(), TestTokens.alemToken()))
                 .isInstanceOf(AuthException.class)
                 .hasMessageContaining("Requested audience not available")
                 .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
@@ -108,14 +115,37 @@ class SsoServiceTest {
     @Test
     @DisplayName("Неизвестный сервис — 404")
     void unknownServiceIsRejected() {
-        assertThatThrownBy(() -> service.start("unknown", TestTokens.alemToken()))
+        assertThatThrownBy(() -> service.start("unknown", TestTokens.secondToken(), TestTokens.alemToken()))
                 .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("Токен Alem другого пользователя — 403, в Keycloak не ходим")
+    void alemTokenOfAnotherUserIsRejected() {
+        String foreignAlem = TestTokens.sign(TestTokens.claims("test-app", List.of("account"))
+                .subject("someone-else").build(), TestTokens.KEY);
+
+        assertThatThrownBy(() -> service.start("ai-gov", TestTokens.secondToken(), foreignAlem))
+                .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("Без нашего токена — 401, без alemToken — 400, токен Alem вместо нашего — 401")
+    void missingOrWrongTokensAreRejected() {
+        assertThatThrownBy(() -> service.start("ai-gov", null, TestTokens.alemToken()))
+                .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+        assertThatThrownBy(() -> service.start("ai-gov", TestTokens.secondToken(), null))
+                .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatThrownBy(() -> service.start("ai-gov", TestTokens.alemToken(), TestTokens.alemToken()))
+                .satisfies(e -> assertThat(((AuthException) e).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+        server.verify();
     }
 
     private String issueCode(String serviceId) {
         server.expect(requestTo(TOKEN_URL))
                 .andRespond(withSuccess("{\"access_token\":\"" + serviceToken(serviceId) + "\"}", MediaType.APPLICATION_JSON));
-        String url = service.start(serviceId, TestTokens.alemToken());
+        String url = service.start(serviceId, TestTokens.secondToken(), TestTokens.alemToken());
         return url.substring(url.indexOf("code=") + 5);
     }
 

@@ -1,6 +1,7 @@
 package com.example.second.sso;
 
 import com.example.second.exception.AuthException;
+import com.example.second.service.KeycloakTokenValidator;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.JWTClaimsSet;
@@ -29,8 +30,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Бесшовный вход в сервис (гайд ai-gov-sso-plan.pdf, раздел 3):
- * start меняет токен Alem на токен с aud = сервис и прячет его под одноразовым кодом,
- * redeem отдаёт сервису данные пользователя и этот токен по коду и секрету сервиса.
+ * start определяет пользователя по нашему токену (azp = second-backend), проверяет, что
+ * переданный отдельно токен Alem принадлежит ему же, меняет токен Alem на токен с aud = сервис
+ * и прячет его под одноразовым кодом; redeem отдаёт сервису данные пользователя и этот токен
+ * по коду и секрету сервиса. Токены Alem second не хранит.
  */
 @Service
 public class SsoService {
@@ -41,7 +44,9 @@ public class SsoService {
     private static final String TOKEN_TYPE_ACCESS_TOKEN = "urn:ietf:params:oauth:token-type:access_token";
 
     private final RestClient restClient;
+    private final KeycloakTokenValidator tokenValidator;
     private final SsoProperties properties;
+    private final String ourClientId;
     private final String tokenUrl;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
@@ -49,26 +54,40 @@ public class SsoService {
     private final Map<String, PendingCode> codes = new ConcurrentHashMap<>();
 
     @Autowired
-    public SsoService(SsoProperties properties,
+    public SsoService(KeycloakTokenValidator tokenValidator,
+                      SsoProperties properties,
+                      @Value("${keycloak.client-id:second-backend}") String ourClientId,
                       @Value("${keycloak.server-url:http://localhost:18630}") String serverUrl,
                       @Value("${keycloak.realm:GovApps}") String realm) {
-        this(RestClient.builder().build(), properties, serverUrl, realm, Clock.systemUTC());
+        this(RestClient.builder().build(), tokenValidator, properties, ourClientId, serverUrl, realm, Clock.systemUTC());
     }
 
-    public SsoService(RestClient restClient, SsoProperties properties, String serverUrl, String realm, Clock clock) {
+    public SsoService(RestClient restClient, KeycloakTokenValidator tokenValidator, SsoProperties properties,
+                      String ourClientId, String serverUrl, String realm, Clock clock) {
         this.restClient = restClient;
+        this.tokenValidator = tokenValidator;
         this.properties = properties;
+        this.ourClientId = ourClientId;
         this.tokenUrl = String.format("%s/realms/%s/protocol/openid-connect/token", serverUrl, realm);
         this.clock = clock;
     }
 
-    public String start(String serviceId, String alemToken) {
+    public String start(String serviceId, String ourToken, String alemToken) {
         SsoProperties.Service service = properties.services().get(serviceId);
         if (service == null) {
             throw new AuthException("Неизвестный сервис: " + serviceId, HttpStatus.NOT_FOUND);
         }
+        if (ourToken == null || ourToken.isBlank()) {
+            throw new AuthException("Нужен заголовок Authorization: Bearer <токен second>", HttpStatus.UNAUTHORIZED);
+        }
         if (alemToken == null || alemToken.isBlank()) {
-            throw new AuthException("Нужен заголовок Authorization: Bearer <токен Alem>", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("Нужно поле alemToken в теле запроса", HttpStatus.BAD_REQUEST);
+        }
+        JWTClaimsSet user = tokenValidator.validate(ourToken, ourClientId);
+        JWTClaimsSet alemUser = tokenValidator.validate(alemToken, properties.alemClientId());
+        if (user.getSubject() == null || !user.getSubject().equals(alemUser.getSubject())) {
+            log.warn("SSO: токен Alem пользователя {} предъявлен в сессии {}", alemUser.getSubject(), user.getSubject());
+            throw new AuthException("Токен Alem принадлежит другому пользователю", HttpStatus.FORBIDDEN);
         }
         String serviceToken = exchange(serviceId, alemToken);
         String code = newCode();

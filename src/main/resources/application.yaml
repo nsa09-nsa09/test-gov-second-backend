@@ -16,6 +16,7 @@ keycloak:
 
 # Бесшовный вход в сервисы (гайд ai-gov-sso-plan.pdf). Секреты — из keycloak-exp/sso.env (sso-setup.sh).
 sso:
+  alem-client-id: test-app
   exchange-client-id: aitugovworkspace-backend
   exchange-client-secret: ${AITUGOVWORKSPACE_CLIENT_SECRET:}
   code-ttl-seconds: 60

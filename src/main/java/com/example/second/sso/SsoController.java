@@ -24,11 +24,14 @@ public class SsoController {
     }
 
     @Operation(summary = "Выдать одноразовый код для входа в сервис",
-            description = "Authorization: Bearer <токен Alem>. Ответ: адрес callback сервиса с кодом.")
+            description = "Authorization: Bearer <наш токен second>, тело {\"alemToken\": \"...\"}. "
+                    + "Ответ: адрес callback сервиса с кодом.")
     @PostMapping("/{service}/start")
     public Map<String, String> start(@PathVariable("service") String service,
-                                     @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
-        return Map.of("url", ssoService.start(service, bearer(authorization)));
+                                     @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                                     @RequestBody(required = false) Map<String, String> body) {
+        String alemToken = body == null ? null : body.get("alemToken");
+        return Map.of("url", ssoService.start(service, bearer(authorization), alemToken));
     }
 
     @Operation(summary = "Обменять код на данные пользователя",
