@@ -14,6 +14,22 @@ keycloak:
   issuer: ${keycloak.server-url}/realms/${keycloak.realm}
   jwks-url: ${keycloak.server-url}/realms/${keycloak.realm}/protocol/openid-connect/certs
 
+# Бесшовный вход в сервисы (гайд ai-gov-sso-plan.pdf). Секреты — из keycloak-exp/sso.env (sso-setup.sh).
+sso:
+  exchange-client-id: aitugovworkspace-backend
+  exchange-client-secret: ${AITUGOVWORKSPACE_CLIENT_SECRET:}
+  code-ttl-seconds: 60
+  services:
+    ai-gov:
+      callback-url: http://localhost:18651/sso/callback
+      secret: ${SSO_AI_GOV_SECRET:ai-gov-local-secret}
+    documentolog:
+      callback-url: http://localhost:18652/sso/callback
+      secret: ${SSO_DOCUMENTOLOG_SECRET:documentolog-local-secret}
+    eotinish:
+      callback-url: http://localhost:18653/sso/callback
+      secret: ${SSO_EOTINISH_SECRET:eotinish-local-secret}
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
