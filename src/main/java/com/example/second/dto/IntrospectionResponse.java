@@ -17,7 +17,7 @@ public record IntrospectionResponse(
     @Schema(example = "aitu3") String username,
     @JsonProperty("token_type") @Schema(example = "Bearer") String tokenType,
     @Schema(example = "openid profile email") String scope,
-    @Schema(example = "http://localhost:8180/realms/GovApps") String iss,
+    @Schema(example = "http://localhost:18630/realms/GovApps") String iss,
     @Schema(description = "ISO-8601", example = "2026-10-29T18:00:00Z") String iat,
     @Schema(description = "ISO-8601", example = "2026-10-29T18:05:00Z") String exp
 ) {}

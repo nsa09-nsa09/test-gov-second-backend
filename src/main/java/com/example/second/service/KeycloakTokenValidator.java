@@ -36,7 +36,7 @@ public class KeycloakTokenValidator {
 
     @Autowired
     public KeycloakTokenValidator(KeycloakJwksService jwksService,
-                                  @Value("${keycloak.issuer:http://localhost:8180/realms/GovApps}") String expectedIssuer) {
+                                  @Value("${keycloak.issuer:http://localhost:18630/realms/GovApps}") String expectedIssuer) {
         this.jwksService = jwksService;
         this.expectedIssuer = expectedIssuer;
     }

@@ -17,8 +17,8 @@ public class OpenApiConfig {
     public static final String BEARER_SCHEME = "bearerAuth";
 
     @Bean
-    public OpenAPI secondOpenApi(@Value("${server.port:8081}") int port,
-                                 @Value("${keycloak.issuer:http://localhost:8180/realms/GovApps}") String issuer,
+    public OpenAPI secondOpenApi(@Value("${server.port:18641}") int port,
+                                 @Value("${keycloak.issuer:http://localhost:18630/realms/GovApps}") String issuer,
                                  @Value("${keycloak.client-id:second-backend}") String clientId) {
         String description = """
                 Второй backend GovApps. Получает access token, выданный **alem** (клиент Keycloak `test-app`),
@@ -35,7 +35,7 @@ public class OpenApiConfig {
                 ```
 
                 ### Как проверить в Swagger
-                1. Получите токен A в Swagger alem (`http://localhost:8080/swagger-ui.html`, `POST /api/auth/login`).
+                1. Получите токен A в Swagger alem (`http://localhost:18640/swagger-ui.html`, `POST /api/auth/login`).
                 2. Здесь: **Authorize** → вставьте A → `GET /api/second/token-info` (`accepted_by_me=false`) и `GET /api/second/me` (401).
                 3. `POST /api/auth/token-exchange` (тело можно оставить пустым — токен возьмётся из Authorize).
                 4. **Authorize** → вставьте `access_token` из ответа → `GET /api/second/me` (200).

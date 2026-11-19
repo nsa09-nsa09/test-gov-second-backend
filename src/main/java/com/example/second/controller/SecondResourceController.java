@@ -67,7 +67,7 @@ public class SecondResourceController {
                               "message": "Успешная авторизация в Second Backend",
                               "data": {
                                 "service": "second-backend",
-                                "issuer": "http://localhost:8180/realms/GovApps",
+                                "issuer": "http://localhost:18630/realms/GovApps",
                                 "azp": "second-backend",
                                 "audience": ["account"],
                                 "expires_at": "2026-10-29T18:06:00Z",
@@ -120,11 +120,11 @@ public class SecondResourceController {
                             {
                               "alg": "RS256",
                               "kid": "Xx9kQ...",
-                              "claims": {"iss": "http://localhost:8180/realms/GovApps", "azp": "test-app", "aud": ["second-backend", "account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:05:00Z"},
+                              "claims": {"iss": "http://localhost:18630/realms/GovApps", "azp": "test-app", "aud": ["second-backend", "account"], "sub": "b2f67ac1-...", "exp": "2026-10-29T18:05:00Z"},
                               "checks": [
                                 {"name": "format", "passed": true, "detail": "JWT распарсен"},
                                 {"name": "signature", "passed": true, "detail": "RS256, ключ kid='Xx9kQ...' из JWKS Keycloak"},
-                                {"name": "issuer", "passed": true, "detail": "iss='http://localhost:8180/realms/GovApps'"},
+                                {"name": "issuer", "passed": true, "detail": "iss='http://localhost:18630/realms/GovApps'"},
                                 {"name": "expiration", "passed": true, "detail": "Действует до 2026-10-29T18:05:00Z"},
                                 {"name": "authorized_party", "passed": false, "detail": "azp='test-app', ожидается 'second-backend'. Получите токен через POST /api/auth/token-exchange"}
                               ],

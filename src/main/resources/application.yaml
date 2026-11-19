@@ -1,18 +1,35 @@
 server:
-  port: 8081
+  port: 18641
 
 spring:
   application:
     name: second
 
 keycloak:
-  server-url: http://localhost:8180
+  server-url: http://localhost:18630
   realm: GovApps
   client-id: second-backend
   client-secret: wCEkTsw9Fyi8fwvLO1MSuPzf4uX4N6rVFGJqphCdPuTWEt4awJgkmtRm5WndaQZ6VwxtTHKYPLtELbuWVTPVdn
   # Ожидаемый issuer токенов Keycloak и JWKS для проверки RS256-подписи
   issuer: ${keycloak.server-url}/realms/${keycloak.realm}
   jwks-url: ${keycloak.server-url}/realms/${keycloak.realm}/protocol/openid-connect/certs
+
+# Бесшовный вход в сервисы (гайд ai-gov-sso-plan.pdf). Секреты — из keycloak-exp/sso.env (sso-setup.sh).
+sso:
+  alem-client-id: test-app
+  exchange-client-id: aitugovworkspace-backend
+  exchange-client-secret: ${AITUGOVWORKSPACE_CLIENT_SECRET:}
+  code-ttl-seconds: 60
+  services:
+    ai-gov:
+      callback-url: http://localhost:18651/sso/callback
+      secret: ${SSO_AI_GOV_SECRET:ai-gov-local-secret}
+    documentolog:
+      callback-url: http://localhost:18652/sso/callback
+      secret: ${SSO_DOCUMENTOLOG_SECRET:documentolog-local-secret}
+    eotinish:
+      callback-url: http://localhost:18653/sso/callback
+      secret: ${SSO_EOTINISH_SECRET:eotinish-local-secret}
 
 springdoc:
   swagger-ui:
@@ -22,4 +39,4 @@ springdoc:
 
 cors:
   allowed-origins:
-    - http://localhost:5173
+    - http://localhost:18650
