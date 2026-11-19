@@ -5,21 +5,20 @@ spring:
   application:
     name: second
 
-alem:
-  jwks-url: http://localhost:8080/api/auth/jwks
-
 keycloak:
   server-url: http://localhost:8180
   realm: GovApps
   client-id: second-backend
   client-secret: wCEkTsw9Fyi8fwvLO1MSuPzf4uX4N6rVFGJqphCdPuTWEt4awJgkmtRm5WndaQZ6VwxtTHKYPLtELbuWVTPVdn
+  # Ожидаемый issuer токенов Keycloak и JWKS для проверки RS256-подписи
+  issuer: ${keycloak.server-url}/realms/${keycloak.realm}
+  jwks-url: ${keycloak.server-url}/realms/${keycloak.realm}/protocol/openid-connect/certs
 
-jwt:
-  secret: second-backend-super-secret-key-that-is-at-least-256-bits-long-for-hmac-sha256
-  issuer: second-backend
-  audience: second-service
-  access-token-expiration-seconds: 900       # 15 minutes
-  refresh-token-expiration-seconds: 604800   # 7 days
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
 
 cors:
   allowed-origins:
