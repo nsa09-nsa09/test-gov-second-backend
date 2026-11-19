@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Бесшовный вход в сервис (гайд ai-gov-sso-plan.pdf, раздел 3):
  * start определяет пользователя по нашему токену (azp = second-backend), проверяет, что
  * переданный отдельно токен Alem принадлежит ему же, меняет токен Alem на токен с aud = сервис
- * и прячет его под одноразовым кодом; redeem отдаёт сервису данные пользователя и этот токен
+ * и прячет его под одноразовым кодом; redeem отдаёт сервису этот токен
  * по коду и секрету сервиса. Токены Alem second не хранит.
  */
 @Service
@@ -107,13 +107,8 @@ public class SsoService {
             log.warn("SSO: сервис {} предъявил код, выданный для {}", serviceId, pending.serviceId());
             throw new AuthException("Код выдан для другого сервиса", HttpStatus.FORBIDDEN);
         }
-        JWTClaimsSet claims = claimsOf(pending.accessToken());
-        log.info("SSO: сервис {} получил пользователя {}", serviceId, claims.getSubject());
-        return new SsoRedeemResponse(
-                claims.getSubject(),
-                stringClaim(claims, "name"),
-                stringClaim(claims, "email"),
-                pending.accessToken());
+        log.info("SSO: сервис {} получил токен пользователя {}", serviceId, claimsOf(pending.accessToken()).getSubject());
+        return new SsoRedeemResponse(pending.accessToken());
     }
 
     private String exchange(String serviceId, String alemToken) {
@@ -176,11 +171,6 @@ public class SsoService {
         } catch (ParseException e) {
             throw new AuthException("Keycloak вернул нечитаемый токен: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
-    }
-
-    private static String stringClaim(JWTClaimsSet claims, String name) {
-        Object value = claims.getClaim(name);
-        return value == null ? null : value.toString();
     }
 
     private record PendingCode(String serviceId, String accessToken, Instant expiresAt) {

@@ -54,7 +54,7 @@ class SsoServiceTest {
     }
 
     @Test
-    @DisplayName("start меняет токен с audience сервиса, redeem отдаёт пользователя один раз")
+    @DisplayName("start меняет токен с audience сервиса, redeem отдаёт токен один раз")
     void startAndRedeemOnce() {
         String serviceToken = serviceToken("ai-gov");
         server.expect(requestTo(TOKEN_URL))
@@ -69,9 +69,8 @@ class SsoServiceTest {
         assertThat(url).startsWith("http://ai/sso/callback?code=");
         String code = url.substring(url.indexOf("code=") + 5);
 
-        SsoRedeemResponse user = service.redeem("ai-secret", code);
-        assertThat(user.userId()).isEqualTo("user-1");
-        assertThat(user.accessToken()).isEqualTo(serviceToken);
+        SsoRedeemResponse response = service.redeem("ai-secret", code);
+        assertThat(response.accessToken()).isEqualTo(serviceToken);
 
         assertThatThrownBy(() -> service.redeem("ai-secret", code))
                 .isInstanceOf(AuthException.class)
