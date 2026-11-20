@@ -17,6 +17,8 @@ import java.util.Map;
 @Tag(name = "SSO", description = "Бесшовный вход в сервисы через одноразовый код")
 public class SsoController {
 
+    static final String SERVICE_SECRET_HEADER = "X-Service-Secret";
+
     private final SsoService ssoService;
 
     public SsoController(SsoService ssoService) {
@@ -35,11 +37,11 @@ public class SsoController {
     }
 
     @Operation(summary = "Обменять код на данные пользователя",
-            description = "Вызывает бэкенд сервиса. Authorization: Bearer <секрет сервиса>, тело {\"code\": \"...\"}.")
+            description = "Вызывает бэкенд сервиса. X-Service-Secret: <секрет сервиса>, тело {\"code\": \"...\"}.")
     @PostMapping("/redeem")
-    public SsoRedeemResponse redeem(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+    public SsoRedeemResponse redeem(@RequestHeader(value = SERVICE_SECRET_HEADER, required = false) String serviceSecret,
                                     @RequestBody Map<String, String> body) {
-        return ssoService.redeem(bearer(authorization), body.get("code"));
+        return ssoService.redeem(serviceSecret, body.get("code"));
     }
 
     private static String bearer(String authorization) {
